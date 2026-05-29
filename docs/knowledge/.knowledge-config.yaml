@@ -1,4 +1,4 @@
-# Harness 知识库配置 — 查询预算、成熟度、衰减规则
+# Harness 知识库配置 — 查询预算、动态记忆管理（maturity 档位）、衰减规则
 version: 1
 
 roles:

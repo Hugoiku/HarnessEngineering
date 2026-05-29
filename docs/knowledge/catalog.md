@@ -25,7 +25,7 @@
 |---------|---------|--------|----------|-------|-----------|
 | team-conventions | 0 | 0 | 0 | 0 | `team-conventions/catalog.md` |
 | tech-wiki | 0 | 0 | 0 | 0 | `tech-wiki/catalog.md` |
-| project | 1 | 0 | 0 | 1 | `project/catalog.md` |
+| project | 5 | 0 | 0 | 5 | `project/catalog.md` |
 <!-- AGGREGATE_END -->
 
 ## 阶段提示

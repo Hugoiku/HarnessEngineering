@@ -234,6 +234,17 @@ def _catalog_line_python(entry_path: pathlib.Path) -> str:
     )
 
 
+def _catalog_row_entry_id(line: str) -> str | None:
+    if not line.startswith("|"):
+        return None
+    parts = [p.strip() for p in line.split("|")]
+    if len(parts) < 3 or parts[1] in ("ID", ""):
+        return None
+    if parts[1].startswith("-"):
+        return None
+    return parts[1]
+
+
 def upsert_catalog_row(entry_path: pathlib.Path) -> None:
     catalog = catalog_for_entry(entry_path)
     if catalog is None or not catalog.is_file():
@@ -242,19 +253,15 @@ def upsert_catalog_row(entry_path: pathlib.Path) -> None:
     entry_id = fm["id"]
     new_line = catalog_line_for_entry(entry_path)
     lines = catalog.read_text(encoding="utf-8").splitlines()
-    updated: list[str] = []
-    found = False
-    for line in lines:
-        if line.startswith("|") and entry_id in line.split("|")[1:2]:
-            updated.append(new_line)
-            found = True
-        else:
-            updated.append(line)
-    if not found and new_line:
-        for i, line in enumerate(updated):
-            if line.startswith("|----"):
-                updated.insert(i + 1, new_line)
-                break
+    updated = [line for line in lines if _catalog_row_entry_id(line) != entry_id]
+    inserted = False
+    for i, line in enumerate(updated):
+        if line.startswith("|----"):
+            updated.insert(i + 1, new_line)
+            inserted = True
+            break
+    if not inserted and new_line:
+        updated.append(new_line)
     catalog.write_text("\n".join(updated) + "\n", encoding="utf-8")
 
 
@@ -267,7 +274,7 @@ def remove_catalog_row(entry_path: pathlib.Path) -> None:
     lines = [
         line
         for line in catalog.read_text(encoding="utf-8").splitlines()
-        if not (line.startswith("|") and entry_id in line.split("|")[1:2])
+        if _catalog_row_entry_id(line) != entry_id
     ]
     catalog.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
