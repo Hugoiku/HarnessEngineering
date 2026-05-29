@@ -1,6 +1,6 @@
-# Harness Framework
+# HarnessEngineering
 
-面向 Cursor 的泛化 Harness 基础框架：**图书架式知识存储 + 省 Token 索引 + contract 流程约束 + run 工作记忆**；Core Skills 可扩展，git 提交前即可归档经验（不含 commit/PR Skill）。
+Harness All！面向 Cursor 的泛化 Harness 基础框架：**图书架式知识存储 + 省 Token 索引 + contract 流程约束 + run 工作记忆**；Core Skills 可扩展，git 提交前即可归档经验（不含 commit/PR Skill）。
 
 ## 快速开始
 
