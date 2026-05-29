@@ -1,0 +1,28 @@
+name: team-<主题>
+version: 1
+profile: standard
+preconditions:
+  - id: inputs-present
+    action: manual
+    required: true
+steps:
+  - id: orient
+    action: manual
+    required: true
+    evidence: context
+  - id: execute
+    action: manual
+    required: true
+    evidence: result
+  - id: summarize
+    action: manual
+    required: true
+    evidence: summary.md
+postconditions:
+  - id: summary-present
+    check: scripts/harness/gates/run-summary-valid.sh
+    message: evidence/summary.md 须存在且通过 validate-summary 质量检查
+outputs:
+  - result_summary
+on_failure: stop
+waivable: false

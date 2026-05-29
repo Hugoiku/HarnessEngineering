@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Local harness markers
+docs/harness/.verify-passed
+
+# Run working memory (keep structure only)
+docs/harness/runs/**
+!docs/harness/runs/.gitkeep
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# Secrets / local config
+.env
+.env.*
+*.pem
+credentials.json
+
+# Research / scrape cache (not part of framework)
+.firecrawl/
+
+# Staging knowledge (local drafts)
+docs/knowledge/contributions/pending/*
+!docs/knowledge/contributions/pending/.gitkeep
+docs/knowledge/contributions/conflicts/*
+!docs/knowledge/contributions/conflicts/.gitkeep

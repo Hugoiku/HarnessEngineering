@@ -1,0 +1,18 @@
+# Run 工作记忆配置（个人场景保守默认）
+version: 1
+
+run:
+  stale_after_days: 14
+  summary:
+    min_chars: 20
+    forbidden_substrings:
+      - "TODO"
+      - "待补充"
+      - "TBD"
+      - "placeholder"
+      - "示例条目标题"
+
+archive:
+  default_layer: project
+  default_type: guideline
+  prompt_on_completed: true

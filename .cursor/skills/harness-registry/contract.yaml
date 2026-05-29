@@ -1,0 +1,24 @@
+name: harness-registry
+version: 1
+profile: standard
+preconditions:
+  - id: skill-valid
+    check: scripts/harness/validate-skill.sh
+steps:
+  - id: update-registry
+    action: manual
+    required: true
+    evidence: registry_yaml
+  - id: update-agents-md
+    action: manual
+    required: true
+    evidence: agents_index
+  - id: validate-registry
+    action: script
+    script: scripts/harness/validate-registry.sh
+    required: true
+postconditions: []
+outputs:
+  - registered_name
+on_failure: stop
+waivable: false

@@ -1,0 +1,14 @@
+name: harness-self-review
+version: 1
+profile: standard
+preconditions: []
+steps:
+  - id: checklist
+    action: manual
+    required: true
+    evidence: self_review_md
+postconditions: []
+outputs:
+  - self_review_pass
+on_failure: stop
+waivable: false

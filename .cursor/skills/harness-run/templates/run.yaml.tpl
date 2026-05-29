@@ -1,0 +1,9 @@
+skill: example
+profile: standard
+started_at: null
+last_activity_at: null
+status: PENDING
+archived_to_knowledge: false
+current_step: null
+knowledge_references: []
+steps: {}

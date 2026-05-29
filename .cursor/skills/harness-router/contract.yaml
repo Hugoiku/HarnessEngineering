@@ -1,0 +1,28 @@
+name: harness-router
+version: 1
+profile: standard
+preconditions: []
+steps:
+  - id: assess
+    action: script
+    script: scripts/harness/assess.sh
+    required: true
+    evidence: assess_output
+  - id: resolve-run
+    action: manual
+    required: true
+    evidence: run_resolution
+  - id: read-registry
+    action: manual
+    required: true
+    evidence: registry_read
+  - id: recommend
+    action: manual
+    required: true
+    evidence: recommendation
+postconditions: []
+outputs:
+  - recommendation
+  - run_resolution
+on_failure: stop
+waivable: false

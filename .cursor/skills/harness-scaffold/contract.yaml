@@ -1,0 +1,17 @@
+name: harness-scaffold
+version: 1
+profile: standard
+preconditions: []
+steps:
+  - id: create-dirs
+    action: manual
+    required: true
+  - id: assess
+    action: script
+    script: scripts/harness/assess.sh
+    required: true
+postconditions: []
+outputs:
+  - scaffold_ready
+on_failure: stop
+waivable: false

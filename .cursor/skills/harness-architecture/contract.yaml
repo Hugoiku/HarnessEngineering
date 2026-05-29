@@ -1,0 +1,13 @@
+name: harness-architecture
+version: 1
+profile: standard
+preconditions: []
+steps:
+  - id: write-layering
+    action: manual
+    required: true
+postconditions: []
+outputs:
+  - architecture_docs
+on_failure: stop
+waivable: false

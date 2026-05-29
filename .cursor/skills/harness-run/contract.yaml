@@ -1,0 +1,49 @@
+name: harness-run
+version: 1
+profile: standard
+preconditions:
+  - id: skill-exists
+    check: scripts/harness/gates/skill-exists.sh
+    message: 目标 Skill 目录须存在于 .cursor/skills/ 下
+  - id: run-not-stale
+    check: scripts/harness/gates/run-not-stale.sh
+    message: 不能续跑 STALE run；请新建 run 或说「新任务」
+steps:
+  - id: init-run-dir
+    action: manual
+    required: true
+    evidence: run_yaml
+  - id: record-router-resolution
+    action: script
+    script: scripts/harness/record-router-resolution.sh
+    required: true
+    evidence: router-resolution.txt
+  - id: preconditions
+    action: hybrid
+    required: true
+    evidence: precondition_results
+  - id: execute-steps
+    action: manual
+    required: true
+    evidence: step_evidence
+  - id: touch-activity
+    action: script
+    script: scripts/harness/run-touch.sh
+    required: true
+    evidence: activity_touch
+  - id: postconditions
+    action: hybrid
+    required: true
+    evidence: postcondition_results
+postconditions:
+  - id: router-resolution-present
+    check: scripts/harness/gates/router-resolution-present.sh
+    message: 须先经 router-resolve 并写入 evidence/router-resolution.txt
+  - id: run-yaml-final
+    check: scripts/harness/gates/run-yaml-valid.sh
+    message: run.yaml 须为终态；COMPLETED 时 evidence/summary.md 须通过质量检查
+outputs:
+  - run_directory
+  - knowledge_references
+on_failure: stop
+waivable: false

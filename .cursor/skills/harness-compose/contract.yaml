@@ -1,0 +1,17 @@
+name: harness-compose
+version: 1
+profile: standard
+preconditions:
+  - id: workflow-defined
+    action: manual
+steps:
+  - id: run-pipeline
+    action: manual
+    required: true
+    evidence: pipeline_results
+postconditions: []
+outputs:
+  - workflow_name
+  - step_results
+on_failure: stop
+waivable: false

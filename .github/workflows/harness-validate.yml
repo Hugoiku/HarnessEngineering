@@ -1,0 +1,27 @@
+on:
+  push:
+    paths:
+      - '.cursor/skills/**'
+      - 'docs/harness/**'
+      - 'docs/knowledge/**'
+      - 'scripts/harness/**'
+  pull_request:
+    paths:
+      - '.cursor/skills/**'
+      - 'docs/harness/**'
+      - 'docs/knowledge/**'
+      - 'scripts/harness/**'
+
+jobs:
+  harness-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate skill contracts
+        run: bash scripts/harness/validate-contract.sh
+      - name: Validate registry
+        run: bash scripts/harness/validate-registry.sh
+      - name: Knowledge maturity dry-run
+        run: python scripts/harness/knowledge-maturity.py --dry-run
+      - name: Run stale dry-run
+        run: python scripts/harness/run-stale.py --dry-run

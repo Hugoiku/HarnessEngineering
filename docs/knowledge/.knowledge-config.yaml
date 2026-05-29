@@ -1,0 +1,90 @@
+# Harness 知识库配置 — 查询预算、成熟度、衰减规则
+version: 1
+
+roles:
+  maintainer: []   # GitHub 用户名或团队 id；按项目填写
+  contributor: []
+  reader: []
+
+maturity:
+  levels: [draft, verified, proven]
+  promotion:
+    draft:
+      min_reference_count: 1
+      action: upgrade
+      to: verified
+    verified:
+      min_reference_count: 2
+      min_distinct_runs: 2
+      action: upgrade
+      to: proven
+  decay:
+    proven:
+      unused_months: 12
+      action: downgrade
+      to: verified
+    verified:
+      unused_months: 6
+      action: downgrade
+      to: draft
+    draft:
+      stale_months: 6
+      action: archive
+      archive_dir: archive
+
+query_budget:
+  default_profile: standard
+
+  profiles:
+    standard:
+      layer_a_max_lines: 60
+      layer_b_max_lines: 250
+      layer_c_max_entries: 3
+      layer_c_max_lines_each: 200
+      maturity_preference: [proven, verified, draft]
+      layer_preference: [project, biz-wiki, tech-wiki, team-conventions]
+
+    explore:
+      layer_a_max_lines: 60
+      layer_b_max_lines: 300
+      layer_c_max_entries: 5
+      layer_c_max_lines_each: 250
+      maturity_preference: [draft, verified, proven]
+      layer_preference: [project, biz-wiki, tech-wiki, team-conventions]
+
+  phases:
+    orient:
+      allowed_types: [guideline, pitfall, process, model]
+      layer_c_max_entries: 2
+    inspect:
+      allowed_types: [model, guideline]
+      layer_c_max_entries: 1
+    analyze:
+      allowed_types: [model, guideline, pitfall, decision]
+      layer_c_max_entries: 3
+    summarize:
+      allowed_types: [decision, guideline]
+      layer_c_max_entries: 1
+    archive:
+      allowed_types: []
+      layer_c_max_entries: 0
+
+scoring:
+  tag_match: 3
+  phase_match: 2
+  maturity:
+    proven: 2
+    verified: 1
+    draft: 0
+  layer:
+    project: 2
+    biz-wiki: 1
+    tech-wiki: 0
+    team-conventions: 0
+  recent_reference_days: 30
+  recent_reference_bonus: 1
+
+summary:
+  max_chars_zh: 60
+  max_chars_en: 120
+  required_fields: [title, summary, type, maturity, tags]

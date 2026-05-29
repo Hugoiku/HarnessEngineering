@@ -1,0 +1,15 @@
+---
+description: 强制 Harness Skill 执行方式、工作记忆与知识归档规范（个人场景）。
+alwaysApply: true
+---
+
+# Harness 流程规则
+
+- **任何工作事项**（开发、分析、文档等）须：**harness-router → harness-run**，不得仅聊天不落盘。
+- 执行前用 `router-resolve.py` 判定 new/resume；续跑须 `--run-id`，禁止续跑 STALE run。
+- 每个 run 须写 `evidence/router-resolution.txt` 与 **`evidence/summary.md`**；`COMPLETED` 前 summary 须通过 `validate-summary.py`。
+- 按 Layer A → B → C 读知识；遵守 `docs/knowledge/.knowledge-config.yaml` 查询预算。
+- 跨会话复用：任务 **COMPLETED** 后推荐 **harness-archive**（`archive-from-run.py`）。
+- 不以对话作为唯一真相源。
+- contract 门禁失败：立即停止并修复。
+- 本框架不使用 harness-commit / harness-pr Skill。

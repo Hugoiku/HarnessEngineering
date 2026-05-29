@@ -1,0 +1,23 @@
+version: 3
+profile: cursor-colleague-extensible
+
+maturity_level: 3
+
+core:
+  scaffold: true
+  agents_map: true
+  docs_base: true
+  cursor_rules: true
+  architecture: true
+  quality_gates: true
+  platform_ready: true
+  workflow_skills_ready: true
+  knowledge_skills_ready: true
+
+extension:
+  team_skills_count: 0
+  registered: []
+  workflows_defined: []
+
+next_recommended: harness-create-skill
+blockers: []

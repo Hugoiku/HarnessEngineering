@@ -1,0 +1,13 @@
+name: harness-cursor-rules
+version: 1
+profile: standard
+preconditions: []
+steps:
+  - id: write-rules
+    action: manual
+    required: true
+postconditions: []
+outputs:
+  - rules_file
+on_failure: stop
+waivable: false

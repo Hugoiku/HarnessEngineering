@@ -1,0 +1,22 @@
+name: harness-archive
+version: 1
+profile: standard
+preconditions:
+  - id: run-completed
+    check: scripts/harness/gates/run-completed.sh
+    message: 归档前 run 须为 COMPLETED 且 evidence/summary.md 已通过质量检查
+steps:
+  - id: archive-from-run
+    action: script
+    script: scripts/harness/archive-from-run.sh
+    required: true
+    evidence: archived_entry
+postconditions:
+  - id: run-archived
+    check: scripts/harness/gates/run-archived.sh
+    message: 须已成功写入 knowledge 并标记 archived_to_knowledge
+outputs:
+  - knowledge_entry_ids
+  - log_append
+on_failure: stop
+waivable: false

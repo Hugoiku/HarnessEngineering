@@ -1,0 +1,24 @@
+name: harness-doc-garden
+version: 1
+profile: standard
+preconditions: []
+steps:
+  - id: lint-sync
+    action: manual
+    required: true
+    evidence: doc_garden_report
+  - id: apply-maturity
+    action: script
+    script: scripts/harness/knowledge-maturity-apply.sh
+    required: true
+    evidence: maturity_report
+  - id: aggregate
+    action: script
+    script: scripts/harness/catalog-aggregate.sh
+    required: true
+postconditions: []
+outputs:
+  - lint_report
+  - maturity_report
+on_failure: stop
+waivable: false

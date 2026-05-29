@@ -1,0 +1,16 @@
+name: harness-quality-gates
+version: 1
+profile: standard
+preconditions: []
+steps:
+  - id: golden-principles
+    action: manual
+    required: true
+  - id: ci-workflow
+    action: manual
+    required: true
+postconditions: []
+outputs:
+  - quality_gates_ready
+on_failure: stop
+waivable: false

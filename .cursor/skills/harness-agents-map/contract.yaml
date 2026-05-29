@@ -1,0 +1,16 @@
+name: harness-agents-map
+version: 1
+profile: standard
+preconditions: []
+steps:
+  - id: write-agents-md
+    action: manual
+    required: true
+    evidence: agents_md
+postconditions:
+  - id: agents-exists
+    check: scripts/harness/gates/agents-exists.sh
+outputs:
+  - agents_md
+on_failure: stop
+waivable: false

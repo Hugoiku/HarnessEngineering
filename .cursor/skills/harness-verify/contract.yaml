@@ -1,0 +1,18 @@
+name: harness-verify
+version: 1
+profile: standard
+preconditions: []
+steps:
+  - id: run-checks
+    action: manual
+    required: true
+    evidence: verify_log
+  - id: write-marker
+    action: manual
+    required: false
+    evidence: verify_marker
+postconditions: []
+outputs:
+  - verify_passed
+on_failure: stop
+waivable: false

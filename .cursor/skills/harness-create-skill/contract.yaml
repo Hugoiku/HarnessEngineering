@@ -1,0 +1,23 @@
+name: harness-create-skill
+version: 1
+profile: standard
+preconditions: []
+steps:
+  - id: choose-name
+    action: manual
+    required: true
+    evidence: skill_name
+  - id: scaffold-files
+    action: manual
+    required: true
+    evidence: skill_dir
+  - id: validate
+    action: script
+    script: scripts/harness/validate-skill.sh
+    required: true
+    evidence: validate_ok
+postconditions: []
+outputs:
+  - skill_path
+on_failure: stop
+waivable: false

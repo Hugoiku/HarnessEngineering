@@ -1,0 +1,26 @@
+name: harness-docs-base
+version: 1
+profile: standard
+preconditions: []
+steps:
+  - id: scaffold-dirs
+    action: manual
+    required: true
+    evidence: dirs_created
+  - id: write-config
+    action: manual
+    required: true
+    evidence: knowledge_config
+  - id: aggregate
+    action: script
+    script: scripts/harness/catalog-aggregate.sh
+    required: true
+    evidence: layer_a
+postconditions:
+  - id: catalog-exists
+    check: scripts/harness/gates/catalog-exists.sh
+    message: docs/knowledge/catalog.md 须存在
+outputs:
+  - knowledge_tree
+on_failure: stop
+waivable: false

@@ -1,0 +1,14 @@
+name: harness-gc
+version: 1
+profile: standard
+preconditions: []
+steps:
+  - id: scan
+    action: manual
+    required: true
+    evidence: gc_report
+postconditions: []
+outputs:
+  - gc_report
+on_failure: stop
+waivable: false
