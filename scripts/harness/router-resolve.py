@@ -1,78 +1,59 @@
 #!/usr/bin/env python3
-"""Resolve harness-run target: resume existing run vs start new (working memory sync)."""
+"""
+router-resolve: 提供工作记忆状态数据，供 Agent 做语义路由决策。
+
+脚本只负责：
+  1. 标记 STALE run（客观事实）
+  2. 收集并输出结构化状态 JSON（running runs、team skills、core skills）
+
+语义判断（意图匹配哪个 run、该 resume 还是 new）由 Agent（LLM）完成。
+
+用法：
+  python router-resolve.py --data --json   # 推荐：输出状态数据给 Agent 推理
+  python router-resolve.py --list-running  # 兼容旧调用：列出 RUNNING runs
+"""
 from __future__ import annotations
 
 import argparse
+import json
 import pathlib
 import re
+import subprocess
 import sys
 from datetime import datetime, timezone
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 RUNS_DIR = ROOT / "docs/harness/runs"
 REGISTRY = ROOT / "docs/harness/skills.registry.yaml"
+SKILLS_DIR = ROOT / ".cursor/skills"
 
-# apply stale marks before resolve
-import subprocess
 
-def _apply_stale() -> None:
+# ---------------------------------------------------------------------------
+# STALE 标记（客观判断，保留在脚本）
+# ---------------------------------------------------------------------------
+
+def _apply_stale() -> bool:
     stale = ROOT / "scripts/harness/run-stale.py"
-    if stale.is_file():
-        subprocess.run(
-            [sys.executable, str(stale), "--apply"],
-            cwd=ROOT,
-            capture_output=True,
-        )
-
-NEW_TASK_PATTERNS = [
-    r"新任务",
-    r"重新开始",
-    r"重新来",
-    r"另起",
-    r"新开",
-    r"\bnew run\b",
-    r"\bnew task\b",
-    r"\bstart over\b",
-]
-RESUME_PATTERNS = [
-    r"继续",
-    r"接着",
-    r"同一任务",
-    r"续跑",
-    r"\bresume\b",
-    r"\bcontinue\b",
-]
+    if not stale.is_file():
+        return False
+    r = subprocess.run(
+        [sys.executable, str(stale), "--apply"],
+        cwd=ROOT,
+        capture_output=True,
+    )
+    return r.returncode == 0
 
 
-def _parse_registry() -> list[dict]:
-    if not REGISTRY.is_file():
-        return []
-    text = REGISTRY.read_text(encoding="utf-8")
-    teams: list[dict] = []
-    for block in re.finditer(
-        r"- name:\s*(\S+)\s*\n(.*?)(?=\n  - name:|\nworkflows:|\Z)",
-        text,
-        re.S,
-    ):
-        name = block.group(1)
-        body = block.group(2)
-        triggers: list[str] = []
-        trig_section = re.search(r"triggers:\s*\n((?:\s+-\s+.+\n)+)", body)
-        if trig_section:
-            triggers = [
-                line.strip()[2:].strip().strip('"').strip("'")
-                for line in trig_section.group(1).splitlines()
-                if line.strip().startswith("-")
-            ]
-        teams.append({"name": name, "triggers": triggers})
-    return teams
-
+# ---------------------------------------------------------------------------
+# 解析单个 run
+# ---------------------------------------------------------------------------
 
 def _parse_run(run_dir: pathlib.Path) -> dict | None:
     run_yaml = run_dir / "run.yaml"
     if not run_yaml.is_file():
         return None
     text = run_yaml.read_text(encoding="utf-8")
+
     def field(key: str, default: str = "") -> str:
         m = re.search(rf"^{key}:\s*(.+)$", text, re.M)
         return m.group(1).strip().strip('"') if m else default
@@ -81,15 +62,32 @@ def _parse_run(run_dir: pathlib.Path) -> dict | None:
     skill = field("skill")
     profile = field("profile", "standard")
     started = field("started_at")
+    description = field("description")
+
     mtime = datetime.fromtimestamp(run_yaml.stat().st_mtime, tz=timezone.utc)
+    now = datetime.now(tz=timezone.utc)
+    age_days = round((now - mtime).total_seconds() / 86400, 1)
+
+    # 若 run.yaml 没有 description，尝试读 evidence/summary.md 首行
+    if not description:
+        summary_file = run_dir / "evidence" / "summary.md"
+        if summary_file.is_file():
+            first = summary_file.read_text(encoding="utf-8").splitlines()
+            description = next(
+                (l.lstrip("#").strip() for l in first if l.strip() and not l.startswith("---")),
+                "",
+            )
+
     return {
         "run_id": run_dir.name,
         "run_dir": str(run_dir.relative_to(ROOT)).replace("\\", "/"),
         "skill": skill,
         "status": status,
         "profile": profile,
+        "description": description,
         "started_at": started or mtime.isoformat(),
         "updated_at": mtime.isoformat(),
+        "age_days": age_days,
     }
 
 
@@ -110,153 +108,133 @@ def list_runs(status_filter: str | None = None) -> list[dict]:
     return runs
 
 
-def match_skill(user_text: str, registry: list[dict]) -> str | None:
-    text = user_text.lower()
-    best: tuple[int, str] | None = None
-    for entry in registry:
-        name = entry["name"]
-        if name.lower() in text:
-            score = len(name) + 100
-            if best is None or score > best[0]:
-                best = (score, name)
-        for trig in entry.get("triggers") or []:
-            if trig.lower() in text:
-                score = len(trig)
-                if best is None or score > best[0]:
-                    best = (score, name)
-    # harness-* core skills explicit mention
-    for m in re.finditer(r"\bharness-[\w-]+\b", user_text, re.I):
-        name = m.group(0).lower()
-        score = 50 + len(name)
-        if best is None or score > best[0]:
-            best = (score, name)
-    return best[1] if best else None
+# ---------------------------------------------------------------------------
+# 解析 Team Skill 注册表
+# ---------------------------------------------------------------------------
+
+def _parse_registry() -> list[dict]:
+    if not REGISTRY.is_file():
+        return []
+    text = REGISTRY.read_text(encoding="utf-8")
+    teams: list[dict] = []
+    for block in re.finditer(
+        r"- name:\s*(\S+)\s*\n(.*?)(?=\n  - name:|\nworkflows:|\Z)",
+        text,
+        re.S,
+    ):
+        name = block.group(1)
+        body = block.group(2)
+
+        desc_m = re.search(r"description:\s*(.+)", body)
+        description = desc_m.group(1).strip().strip('"') if desc_m else ""
+
+        triggers: list[str] = []
+        trig_m = re.search(r"triggers:\s*\n((?:\s+-\s+.+\n)+)", body)
+        if trig_m:
+            triggers = [
+                line.strip()[2:].strip().strip('"').strip("'")
+                for line in trig_m.group(1).splitlines()
+                if line.strip().startswith("-")
+            ]
+
+        skill_path_m = re.search(r"skill_path:\s*(.+)", body)
+        skill_path = skill_path_m.group(1).strip().strip('"') if skill_path_m else ""
+
+        # 若注册表里 description 为空，尝试从 SKILL.md frontmatter 读
+        if not description and skill_path:
+            sm = (ROOT / skill_path).expanduser()
+            if sm.is_file():
+                sm_text = sm.read_text(encoding="utf-8")
+                dm = re.search(r"^description:\s*(.+)$", sm_text, re.M)
+                if dm:
+                    description = dm.group(1).strip().strip('"')
+
+        teams.append({
+            "name": name,
+            "description": description,
+            "triggers": triggers,
+        })
+    return teams
 
 
-def wants_new_task(user_text: str) -> bool:
-    text = user_text.lower()
-    return any(re.search(p, text, re.I) for p in NEW_TASK_PATTERNS)
+# ---------------------------------------------------------------------------
+# 枚举 Core Skill（harness-*）描述
+# ---------------------------------------------------------------------------
+
+def _load_core_skills() -> list[dict]:
+    skills: list[dict] = []
+    if not SKILLS_DIR.is_dir():
+        return skills
+    for skill_md in sorted(SKILLS_DIR.glob("harness-*/SKILL.md")):
+        name = skill_md.parent.name
+        try:
+            text = skill_md.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        dm = re.search(r"^description:\s*(.+)$", text, re.M)
+        description = dm.group(1).strip().strip('"') if dm else ""
+        skills.append({"name": name, "description": description})
+    return skills
 
 
-def wants_resume(user_text: str) -> bool:
-    text = user_text.lower()
-    return any(re.search(p, text, re.I) for p in RESUME_PATTERNS)
+# ---------------------------------------------------------------------------
+# 主数据载荷（供 Agent 语义推理）
+# ---------------------------------------------------------------------------
 
+def build_data_payload() -> dict:
+    stale_applied = _apply_stale()
 
-def resolve(user_text: str) -> dict:
-    _apply_stale()
-    registry = _parse_registry()
-    matched_skill = match_skill(user_text, registry)
     running = list_runs("RUNNING")
-    all_recent = list_runs(None)
+    recent_completed = [r for r in list_runs(None) if r["status"] in ("COMPLETED", "STALE")][:5]
+    team_skills = _parse_registry()
+    core_skills = _load_core_skills()
 
-    result: dict = {
-        "action": "new",
-        "skill": matched_skill,
-        "run_id": None,
-        "run_dir": None,
-        "profile": "standard",
-        "sync_work_memory": True,
-        "reason": "",
-        "command": None,
+    return {
+        "stale_applied": stale_applied,
+        "running": running,
+        "recent_completed": recent_completed,
+        "team_skills": team_skills,
+        "core_skills": core_skills,
+        "_routing_note": (
+            "由 Agent（LLM）根据此数据做语义路由决策，"
+            "脚本不做 resume/new 判断。"
+            "决策维度：① 用户意图与 running[].description/skill 语义相似 → resume；"
+            "② 意图明显是全新任务或与 running 无关 → new；"
+            "③ 从 team_skills + core_skills 中语义匹配目标 skill。"
+        ),
     }
 
-    if wants_new_task(user_text):
-        result["reason"] = "用户明确要求新任务，创建新 run"
-        if matched_skill:
-            result["command"] = f"harness-run {matched_skill}"
-        return result
 
-    # Prefer RUNNING run matching skill
-    candidates = running
-    if matched_skill:
-        skill_runs = [r for r in running if r["skill"] == matched_skill]
-        if skill_runs:
-            candidates = skill_runs
-
-    if candidates and (wants_resume(user_text) or matched_skill or len(running) == 1):
-        pick = candidates[0]
-        if matched_skill and pick["skill"] != matched_skill and not wants_resume(user_text):
-            result["reason"] = f"进行中的 run 为 {pick['skill']}，与当前意图 {matched_skill} 不一致，建议新 run"
-            result["command"] = f"harness-run {matched_skill}"
-            return result
-
-        result["action"] = "resume"
-        result["skill"] = pick["skill"]
-        result["run_id"] = pick["run_id"]
-        result["run_dir"] = pick["run_dir"]
-        result["profile"] = pick["profile"]
-        result["reason"] = (
-            f"发现 RUNNING 工作记忆 {pick['run_dir']}（skill={pick['skill']}），"
-            "续跑并同步 evidence/run.yaml，勿新建 run"
-        )
-        result["command"] = f"harness-run {pick['skill']} --run-id {pick['run_dir']}"
-        return result
-
-    if matched_skill:
-        result["reason"] = "无进行中的 run，创建新工作记忆"
-        result["command"] = f"harness-run {matched_skill}"
-        return result
-
-    if running:
-        pick = running[0]
-        result["action"] = "resume"
-        result["skill"] = pick["skill"]
-        result["run_id"] = pick["run_id"]
-        result["run_dir"] = pick["run_dir"]
-        result["profile"] = pick["profile"]
-        result["reason"] = (
-            f"未匹配 Team Skill，但存在 RUNNING run {pick['run_dir']}，"
-            "建议续跑以保持工作记忆一致"
-        )
-        result["command"] = f"harness-run {pick['skill']} --run-id {pick['run_dir']}"
-        return result
-
-    result["action"] = "none"
-    result["sync_work_memory"] = False
-    result["reason"] = "未匹配 Skill 且无 RUNNING run，按成熟度推荐 create-skill 或 core skill"
-    return result
-
-
-def format_output(data: dict, as_json: bool) -> str:
-    if as_json:
-        import json
-        return json.dumps(data, ensure_ascii=False, indent=2)
-    lines = [
-        f"action: {data['action']}",
-        f"skill: {data.get('skill') or '-'}",
-        f"run_id: {data.get('run_id') or '-'}",
-        f"run_dir: {data.get('run_dir') or '-'}",
-        f"sync_work_memory: {data['sync_work_memory']}",
-        f"reason: {data['reason']}",
-    ]
-    if data.get("command"):
-        lines.append(f"command: {data['command']}")
-    return "\n".join(lines)
-
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Router: resume vs new harness run.")
-    parser.add_argument("message", nargs="?", default="", help="User intent / latest message")
-    parser.add_argument("--json", action="store_true", help="JSON output")
-    parser.add_argument("--list-running", action="store_true", help="List RUNNING runs only")
+    parser = argparse.ArgumentParser(
+        description="router-resolve: 输出工作记忆状态数据，供 Agent 语义路由。"
+    )
+    parser.add_argument(
+        "--data",
+        action="store_true",
+        help="（推荐）输出完整状态 JSON，由 Agent 做语义路由决策",
+    )
+    parser.add_argument("--json", action="store_true", help="JSON 格式输出（--list-running 专用）")
+    parser.add_argument("--list-running", action="store_true", help="仅列出 RUNNING runs（兼容旧调用）")
     args = parser.parse_args()
 
     if args.list_running:
+        _apply_stale()
         runs = list_runs("RUNNING")
         if args.json:
-            import json
             print(json.dumps(runs, ensure_ascii=False, indent=2))
         else:
             for r in runs:
                 print(f"{r['run_dir']}\t{r['skill']}\t{r['status']}")
         return
 
-    if not args.message.strip():
-        parser.print_help()
-        sys.exit(1)
-
-    print(format_output(resolve(args.message.strip()), args.json))
+    # 默认或 --data：输出完整数据载荷
+    payload = build_data_payload()
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":

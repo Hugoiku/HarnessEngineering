@@ -13,7 +13,12 @@ harness-run <skill-name> [--profile standard|strict|draft] [--run-id <run-dir>]
 
 **个人流程（必须）**：
 
-1. 对用户最新输入运行 `python scripts/harness/router-resolve.py "<消息>"`
+1. 获取工作记忆状态并做**语义路由**（由你作为 Agent 判断，非正则）：
+   ```bash
+   python scripts/harness/router-resolve.py --data
+   ```
+   读取输出中的 `running[]`、`team_skills[]`、`core_skills[]`，
+   语义判断 resume/new 及目标 skill（见 harness-router/SKILL.md 决策规则）。
 2. 设置环境变量并执行本 Skill：
    ```bash
    export HARNESS_USER_MESSAGE="<用户最新消息>"
