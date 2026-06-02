@@ -17,15 +17,40 @@ from __future__ import annotations
 import argparse
 import json
 import pathlib
-import re
 import subprocess
 import sys
 from datetime import datetime, timezone
+
+import yaml
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 RUNS_DIR = ROOT / "docs/harness/runs"
 REGISTRY = ROOT / "docs/harness/skills.registry.yaml"
 SKILLS_DIR = ROOT / ".cursor/skills"
+
+sys.path.insert(0, str(ROOT / "scripts/harness"))
+from run_common import read_run_fields  # noqa: E402
+
+
+def _safe_load(path: pathlib.Path) -> dict:
+    try:
+        return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError:
+        return {}
+
+
+def _parse_frontmatter(text: str) -> dict:
+    """Extract YAML frontmatter between --- delimiters."""
+    if not text.startswith("---"):
+        return {}
+    end = text.find("\n---", 3)
+    if end == -1:
+        return {}
+    fm_text = text[4:end]
+    try:
+        return yaml.safe_load(fm_text) or {}
+    except yaml.YAMLError:
+        return {}
 
 
 # ---------------------------------------------------------------------------
@@ -52,40 +77,33 @@ def _parse_run(run_dir: pathlib.Path) -> dict | None:
     run_yaml = run_dir / "run.yaml"
     if not run_yaml.is_file():
         return None
-    text = run_yaml.read_text(encoding="utf-8")
 
-    def field(key: str, default: str = "") -> str:
-        m = re.search(rf"^{key}:\s*(.+)$", text, re.M)
-        return m.group(1).strip().strip('"') if m else default
-
-    status = field("status", "UNKNOWN")
-    skill = field("skill")
-    profile = field("profile", "standard")
-    started = field("started_at")
-    description = field("description")
+    fields = read_run_fields(run_dir)
+    if not fields:
+        return None
 
     mtime = datetime.fromtimestamp(run_yaml.stat().st_mtime, tz=timezone.utc)
     now = datetime.now(tz=timezone.utc)
     age_days = round((now - mtime).total_seconds() / 86400, 1)
 
-    # 若 run.yaml 没有 description，尝试读 evidence/summary.md 首行
+    description = fields.get("description", "")
     if not description:
         summary_file = run_dir / "evidence" / "summary.md"
         if summary_file.is_file():
             first = summary_file.read_text(encoding="utf-8").splitlines()
             description = next(
-                (l.lstrip("#").strip() for l in first if l.strip() and not l.startswith("---")),
+                (ln.lstrip("#").strip() for ln in first if ln.strip() and not ln.startswith("---")),
                 "",
             )
 
     return {
         "run_id": run_dir.name,
         "run_dir": str(run_dir.relative_to(ROOT)).replace("\\", "/"),
-        "skill": skill,
-        "status": status,
-        "profile": profile,
+        "skill": fields.get("skill", ""),
+        "status": fields.get("status", "UNKNOWN"),
+        "profile": fields.get("profile", "standard"),
         "description": description,
-        "started_at": started or mtime.isoformat(),
+        "started_at": fields.get("started_at") or mtime.isoformat(),
         "updated_at": mtime.isoformat(),
         "age_days": age_days,
     }
@@ -115,46 +133,25 @@ def list_runs(status_filter: str | None = None) -> list[dict]:
 def _parse_registry() -> list[dict]:
     if not REGISTRY.is_file():
         return []
-    text = REGISTRY.read_text(encoding="utf-8")
-    teams: list[dict] = []
-    for block in re.finditer(
-        r"- name:\s*(\S+)\s*\n(.*?)(?=\n  - name:|\nworkflows:|\Z)",
-        text,
-        re.S,
-    ):
-        name = block.group(1)
-        body = block.group(2)
+    raw = _safe_load(REGISTRY)
+    results: list[dict] = []
+    for entry in raw.get("team") or []:
+        if not isinstance(entry, dict):
+            continue
+        name = entry.get("name", "")
+        description = entry.get("description", "")
+        triggers = list(entry.get("triggers") or [])
+        skill_path = entry.get("skill_path", "")
 
-        desc_m = re.search(r"description:\s*(.+)", body)
-        description = desc_m.group(1).strip().strip('"') if desc_m else ""
-
-        triggers: list[str] = []
-        trig_m = re.search(r"triggers:\s*\n((?:\s+-\s+.+\n)+)", body)
-        if trig_m:
-            triggers = [
-                line.strip()[2:].strip().strip('"').strip("'")
-                for line in trig_m.group(1).splitlines()
-                if line.strip().startswith("-")
-            ]
-
-        skill_path_m = re.search(r"skill_path:\s*(.+)", body)
-        skill_path = skill_path_m.group(1).strip().strip('"') if skill_path_m else ""
-
-        # 若注册表里 description 为空，尝试从 SKILL.md frontmatter 读
+        # 注册表无 description 时，从对应 SKILL.md frontmatter 读
         if not description and skill_path:
-            sm = (ROOT / skill_path).expanduser()
+            sm = ROOT / skill_path
             if sm.is_file():
-                sm_text = sm.read_text(encoding="utf-8")
-                dm = re.search(r"^description:\s*(.+)$", sm_text, re.M)
-                if dm:
-                    description = dm.group(1).strip().strip('"')
+                fm = _parse_frontmatter(sm.read_text(encoding="utf-8"))
+                description = fm.get("description", "")
 
-        teams.append({
-            "name": name,
-            "description": description,
-            "triggers": triggers,
-        })
-    return teams
+        results.append({"name": name, "description": description, "triggers": triggers})
+    return results
 
 
 # ---------------------------------------------------------------------------
@@ -168,12 +165,10 @@ def _load_core_skills() -> list[dict]:
     for skill_md in sorted(SKILLS_DIR.glob("harness-*/SKILL.md")):
         name = skill_md.parent.name
         try:
-            text = skill_md.read_text(encoding="utf-8")
+            fm = _parse_frontmatter(skill_md.read_text(encoding="utf-8"))
         except OSError:
             continue
-        dm = re.search(r"^description:\s*(.+)$", text, re.M)
-        description = dm.group(1).strip().strip('"') if dm else ""
-        skills.append({"name": name, "description": description})
+        skills.append({"name": name, "description": fm.get("description", "")})
     return skills
 
 

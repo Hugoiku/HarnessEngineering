@@ -9,6 +9,8 @@ import sys
 from datetime import date, datetime
 from typing import Any
 
+import yaml
+
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 KNOWLEDGE_ROOT = ROOT / "docs/knowledge"
 CONFIG_PATH = KNOWLEDGE_ROOT / ".knowledge-config.yaml"
@@ -17,34 +19,16 @@ ENTRY_GLOBS = ("**/PK-*.md", "**/BK-*.md", "**/TK-*.md")
 SKIP_PARTS = {"archive", "contributions"}
 
 
+def _load_config() -> dict[str, Any]:
+    try:
+        return yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError:
+        return {}
+
+
 def load_maturity_rules(section: str) -> dict[str, Any]:
     """Load promotion or decay rules keyed by current maturity level."""
-    text = CONFIG_PATH.read_text(encoding="utf-8")
-    rules: dict[str, Any] = {}
-    marker = f"  {section}:"
-    in_section = False
-    current: str | None = None
-    for line in text.splitlines():
-        if line.strip() == marker.strip():
-            in_section = True
-            continue
-        if not in_section:
-            continue
-        # 同级 maturity 子节（如 promotion 后遇到 decay）则结束
-        if re.match(r"^  \w", line) and not re.match(r"^    ", line):
-            break
-        if re.match(r"^[a-z_]+:", line):
-            break
-        m_level = re.match(r"^    (\w+):\s*$", line)
-        if m_level:
-            current = m_level.group(1)
-            rules[current] = {}
-            continue
-        m_field = re.match(r"^      (\w+):\s*(.+)$", line)
-        if m_field and current:
-            raw = m_field.group(2).strip().strip('"')
-            rules[current][m_field.group(1)] = int(raw) if raw.isdigit() else raw
-    return rules
+    return _load_config().get("maturity", {}).get(section, {})
 
 
 def load_decay_config() -> dict[str, Any]:

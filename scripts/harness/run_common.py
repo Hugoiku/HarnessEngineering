@@ -6,57 +6,45 @@ import pathlib
 import re
 from datetime import date, datetime, timezone
 
+import yaml
+
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 RUNS_DIR = ROOT / "docs/harness/runs"
 RUN_CONFIG = ROOT / "docs/harness/.run-config.yaml"
 
+_RUN_YAML_KEYS = {
+    "skill", "profile", "status", "started_at",
+    "last_activity_at", "current_step", "archived_to_knowledge",
+}
+
+
+def _safe_load(path: pathlib.Path) -> dict:
+    try:
+        return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError:
+        return {}
+
 
 def load_run_config() -> dict:
-    cfg = {"stale_after_days": 14, "min_chars": 20, "forbidden_substrings": []}
+    defaults: dict = {"stale_after_days": 14, "min_chars": 20, "forbidden_substrings": []}
     if not RUN_CONFIG.is_file():
-        return cfg
-    text = RUN_CONFIG.read_text(encoding="utf-8")
-    m = re.search(r"stale_after_days:\s*(\d+)", text)
-    if m:
-        cfg["stale_after_days"] = int(m.group(1))
-    m = re.search(r"min_chars:\s*(\d+)", text)
-    if m:
-        cfg["min_chars"] = int(m.group(1))
-    forbidden: list[str] = []
-    in_block = False
-    for line in text.splitlines():
-        if "forbidden_substrings:" in line:
-            in_block = True
-            continue
-        if in_block:
-            if re.match(r"^\S", line) and not line.startswith(" "):
-                break
-            fm = re.match(r"\s+-\s+(.+)$", line)
-            if fm:
-                forbidden.append(fm.group(1).strip().strip('"'))
-    cfg["forbidden_substrings"] = forbidden
-    return cfg
+        return defaults
+    raw = _safe_load(RUN_CONFIG)
+    run_sec = raw.get("run") or {}
+    summary_sec = run_sec.get("summary") or {}
+    return {
+        "stale_after_days": float(run_sec.get("stale_after_days", defaults["stale_after_days"])),
+        "min_chars": int(summary_sec.get("min_chars", defaults["min_chars"])),
+        "forbidden_substrings": list(summary_sec.get("forbidden_substrings") or []),
+    }
 
 
 def read_run_fields(run_dir: pathlib.Path) -> dict[str, str]:
     run_yaml = run_dir / "run.yaml"
     if not run_yaml.is_file():
         return {}
-    text = run_yaml.read_text(encoding="utf-8")
-    fields: dict[str, str] = {}
-    for key in (
-        "skill",
-        "profile",
-        "status",
-        "started_at",
-        "last_activity_at",
-        "current_step",
-        "archived_to_knowledge",
-    ):
-        m = re.search(rf"^{key}:\s*(.+)$", text, re.M)
-        if m:
-            fields[key] = m.group(1).strip().strip('"')
-    return fields
+    raw = _safe_load(run_yaml)
+    return {k: str(v) for k, v in raw.items() if k in _RUN_YAML_KEYS and v is not None}
 
 
 def write_run_field(run_dir: pathlib.Path, key: str, value: str) -> None:

@@ -8,6 +8,8 @@ import re
 import shutil
 import sys
 
+import yaml
+
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 PROJECT = ROOT / "docs/knowledge/project"
 SOURCES = ROOT / "docs/knowledge/test-corpus/sources"
@@ -18,16 +20,15 @@ from knowledge_common import append_log, run_catalog_aggregate, split_frontmatte
 
 
 def load_summary_limits() -> tuple[int, int]:
-    max_zh, max_en = 60, 120
-    if KNOWLEDGE_CONFIG.is_file():
-        text = KNOWLEDGE_CONFIG.read_text(encoding="utf-8")
-        m = re.search(r"max_chars_zh:\s*(\d+)", text)
-        if m:
-            max_zh = int(m.group(1))
-        m = re.search(r"max_chars_en:\s*(\d+)", text)
-        if m:
-            max_en = int(m.group(1))
-    return max_zh, max_en
+    defaults = (60, 120)
+    if not KNOWLEDGE_CONFIG.is_file():
+        return defaults
+    try:
+        cfg = yaml.safe_load(KNOWLEDGE_CONFIG.read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError:
+        return defaults
+    summary = cfg.get("summary") or {}
+    return int(summary.get("max_chars_zh", defaults[0])), int(summary.get("max_chars_en", defaults[1]))
 
 
 def extract_pdf_text(path: pathlib.Path) -> tuple[int, str]:

@@ -8,6 +8,8 @@ import random
 import re
 import textwrap
 
+import yaml
+
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 KNOWLEDGE = ROOT / "docs/knowledge"
 KNOWLEDGE_CONFIG = ROOT / "docs/knowledge/.knowledge-config.yaml"
@@ -19,19 +21,25 @@ def est_tokens(text: str) -> int:
 
 
 def load_query_budget() -> dict:
-    cfg = {
+    defaults = {
         "layer_a_max_lines": 60,
         "layer_b_max_lines": 250,
         "layer_c_max_entries": 3,
         "layer_c_max_lines_each": 200,
     }
-    if KNOWLEDGE_CONFIG.is_file():
-        text = KNOWLEDGE_CONFIG.read_text(encoding="utf-8")
-        for key in cfg:
-            m = re.search(rf"{key}:\s*(\d+)", text)
-            if m:
-                cfg[key] = int(m.group(1))
-    return cfg
+    if not KNOWLEDGE_CONFIG.is_file():
+        return defaults
+    try:
+        raw = yaml.safe_load(KNOWLEDGE_CONFIG.read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError:
+        return defaults
+    profile = raw.get("query_budget", {}).get("profiles", {}).get("standard", {})
+    return {
+        "layer_a_max_lines": int(profile.get("layer_a_max_lines", defaults["layer_a_max_lines"])),
+        "layer_b_max_lines": int(profile.get("layer_b_max_lines", defaults["layer_b_max_lines"])),
+        "layer_c_max_entries": int(profile.get("layer_c_max_entries", defaults["layer_c_max_entries"])),
+        "layer_c_max_lines_each": int(profile.get("layer_c_max_lines_each", defaults["layer_c_max_lines_each"])),
+    }
 
 
 def read_file_capped(path: pathlib.Path, max_lines: int | None) -> str:
