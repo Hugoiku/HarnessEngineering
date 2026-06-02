@@ -33,19 +33,45 @@ harness-run <skill-name> [--profile standard|strict|draft] [--run-id <run-dir>]
 
 ## Contract 步骤摘要
 
-| 步骤 | 作用 |
-|------|------|
-| init-run-dir | 创建/打开 run 目录 |
-| record-router-resolution | 写入 `evidence/router-resolution.txt` + touch activity |
-| execute-steps | 按目标 Skill 的 contract 执行 |
-| touch-activity | 更新 `last_activity_at` |
-| postconditions | 终态 + summary 质量（COMPLETED 时） |
+**每完成一个步骤，必须立即用 `run_common.write_run_field` 更新 `current_step`，退出门禁会校验。**
+
+| 步骤 | 完成后写入 current_step | 作用 |
+|------|------------------------|------|
+| init-run-dir | `init-run-dir` | 创建/打开 run 目录 |
+| record-router-resolution | `record-router-resolution` | 调用 `write-router-resolution.py` 写入结构化路由决策 JSON |
+| execute-steps | `execute-steps` | 按目标 Skill 的 contract 执行 |
+| touch-activity | `touch-activity` | 更新 `last_activity_at` |
+| postconditions | `postconditions` | 终态 + summary 质量（COMPLETED 时） |
+
+### 写入路由决策（record-router-resolution 步骤必须做）
+
+```bash
+python scripts/harness/write-router-resolution.py \
+  --run-dir "$RUN_DIR" \
+  --action new \          # new | resume | none
+  --skill <skill-name> \
+  --reason "语义判断：<一句话说明为何选择此 skill 和 action>"
+```
+
+### 更新 current_step 示例
+
+```bash
+python scripts/harness/run-touch.py "$RUN_DIR"  # 同时 touch activity
+# 在 run.yaml 写入 current_step: execute-steps
+python -c "
+import sys; sys.path.insert(0,'scripts/harness')
+from run_common import write_run_field
+from pathlib import Path
+write_run_field(Path('$RUN_DIR'), 'current_step', 'execute-steps')
+"
+```
 
 ## COMPLETED 硬门禁
 
 - 必须存在 `evidence/summary.md`
 - 必须通过 `python scripts/harness/validate-summary.py evidence/summary.md`
-- 不可用占位词、过短一句糊弄
+- `current_step` 须已到达 `execute-steps` 或更晚（防跳步）
+- `evidence/router-resolution.json` 须通过内容校验
 
 ## 知识查询（orient / analyze / summarize）
 
