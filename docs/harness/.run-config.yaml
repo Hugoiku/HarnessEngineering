@@ -5,6 +5,9 @@ run:
   stale_after_days: 14
   summary:
     min_chars: 20
+    # 语义门禁：调用 Claude Haiku 评审摘要质量（需要 ANTHROPIC_API_KEY）
+    semantic_gate: false
+    semantic_model: "claude-haiku-4-5"
     forbidden_substrings:
       - "TODO"
       - "待补充"

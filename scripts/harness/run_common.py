@@ -36,6 +36,8 @@ def load_run_config() -> dict:
         "stale_after_days": float(run_sec.get("stale_after_days", defaults["stale_after_days"])),
         "min_chars": int(summary_sec.get("min_chars", defaults["min_chars"])),
         "forbidden_substrings": list(summary_sec.get("forbidden_substrings") or []),
+        "semantic_gate": bool(summary_sec.get("semantic_gate", False)),
+        "semantic_model": str(summary_sec.get("semantic_model", "claude-haiku-4-5")),
     }
 
 
